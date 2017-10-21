@@ -1,0 +1,15 @@
+set system host-name {{ item.hostname }}
+set system services ssh root-login deny
+set system services ssh protocol-version v2
+set system services ssh client-alive-count-max 3
+set system services ssh client-alive-interval 15
+set system services netconf ssh
+
+{% for ints in core_ints %}
+set interfaces {{ ints.int }} description {{ ints.desc }}
+set interfaces {{ ints.int }} unit 0 family inet address {{ ints.ip }}
+{% endfor %}
+
+{% for rt in core_statics %}
+set routing-options static route {{ rt.lo }}/32 next-hop {{ rt.nxthop }}
+{% endfor %}

@@ -1,0 +1,4 @@
+---
+- name: Generate CORE_ROUTER configuration file
+  template: src=router.j2 dest="{{playbook_dir}}/Configs/{{item.hostname}}.set"
+  with_items: "{{core_router}}"

@@ -1,0 +1,20 @@
+---
+- name: Generate router configuration files
+  hosts: localhost
+
+  roles:
+    - members
+    - keyservers
+    - core_router
+
+- name: Push Junos Configs
+  hosts: devices
+  roles:
+  - Juniper.junos
+  connection: local
+  gather_facts: no
+
+  tasks:
+  - name: Checking NETCONF Connectivity
+    wait_for: host={{ junos_host }} port=830 timeout=5
+

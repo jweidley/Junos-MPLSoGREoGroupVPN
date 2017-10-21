@@ -1,0 +1,21 @@
+---
+######################################################
+# IPSec Group VPNv2 Variables
+######################################################
+svc_set_name: black_group_vpn
+ff_name: IPSEC-REDIRECT
+group_vpn_name: LAB1_IPSEC_OVERLAY
+
+ike_proposal_name: PSK-SHA256-DH14-AES256
+ike_dh_group: group14
+ike_auth_algorithm: sha-256
+ike_encryption_algorithm: aes-256-cbc
+ike_policy_name: MAIN-AES256-01
+ike_psk: Juniper123
+
+ipsec_group_id: 3
+ipsec_mtu: 1400
+ipsec_auth_algorithm: hmac-sha-256-128
+ipsec_proposal_name: AES256-SHA256-L3600
+ipsec_sa_name: GRE_OVERLAY
+

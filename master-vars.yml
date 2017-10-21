@@ -1,0 +1,144 @@
+---
+
+#######################################################################################
+# group_members:
+#	This variable should contain the Group VPNv2 members. Options are:
+#	- hostname: hostname of the device
+#	- wan_int: The name of the WAN facing interface
+#	- wan_int_ip: The IP address of the WAN facing port
+#	- wan_gateway: The default gateway for production traffic
+#	- lan_int: The name of the Customer facing (LAN) interface
+#	- lo0_ip: The loopback IP address (lo0)
+#	- lo0_mask: bit mask for lo0
+#	- svc_int: The port that identifies the MS-MIC,MS-MPC,Inline interface
+#	- ts_fpc: The FPC for tunnel services
+#	- ts_pic: The PIC for tunnel services
+#	- RR: Should be 'true' if the device is a route reflector
+#######################################################################################
+group_members:
+  - { hostname: vmx5, 
+      site_index: 105,
+      wan_int: ge-0/0/1,
+      wan_int_ip: 10.10.5.2, 
+      wan_gateway: 10.10.5.1,
+      lan_int: ge-0/0/2,
+      lo0_ip: 1.1.1.5, 
+      lo0_mask: 32, 
+      svc_int: si-0/0/0,
+      ts_fpc: 0,
+      ts_pic: 0,
+      RR: true 
+    }
+  - { hostname: vmx6, 
+      site_index: 106,
+      wan_int: ge-0/0/1,
+      wan_int_ip: 10.10.6.2, 
+      wan_gateway: 10.10.6.1,
+      lan_int: ge-0/0/2,
+      lo0_ip: 1.1.1.6, 
+      lo0_mask: 32, 
+      svc_int: si-0/0/0,
+      ts_fpc: 0,
+      ts_pic: 0,
+      RR: false 
+    }
+  - { hostname: vmx7, 
+      site_index: 107,
+      wan_int: ge-0/0/1,
+      wan_int_ip: 10.10.7.2, 
+      wan_gateway: 10.10.7.1,
+      lan_int: ge-0/0/2,
+      lo0_ip: 1.1.1.7, 
+      lo0_mask: 32, 
+      svc_int: si-0/0/0,
+      ts_fpc: 0,
+      ts_pic: 0,
+      RR: false 
+    }
+
+#######################################################################################
+# Member GRE P2P
+# Contains the point-to-point IPs for the GRE tunnels. Options are:
+#	- source: The site index for the node that should be configured with this IP
+#	- neighbor: The site index for the remote node.
+#	- ipaddr: The IP address & mask for for the GRE tunnel interface.
+#######################################################################################
+overlay:
+      - { source: 105,
+          neighbor: 106,
+          ipaddr: 1.1.255.6/31
+        }
+      - { source: 105,
+          neighbor: 107,
+          ipaddr: 1.1.255.8/31
+        }
+      - { source: 106,
+          neighbor: 105,
+          ipaddr: 1.1.255.7/31
+        }
+      - { source: 106,
+          neighbor: 107,
+          ipaddr: 1.1.255.10/31
+        }
+      - { source: 107,
+          neighbor: 105,
+          ipaddr: 1.1.255.9/31
+        }
+      - { source: 107,
+          neighbor: 106,
+          ipaddr: 1.1.255.11/31
+        }
+
+#######################################################################################
+# key_server:
+#######################################################################################
+key_server:
+  - { hostname: vsrx1, 
+      untrust_desc: untrust_zone,
+      untrust_int: ge-0/0/0,
+      untrust_ip: 172.25.152.10,
+      untrust_mask: 24,
+      untrust_gateway: 172.25.152.100,
+      trust_desc: trust_zone,
+      trust_int: ge-0/0/1,
+      trust_ip: 2.2.2.2,
+      trust_mask: 24,
+      mgmt_desc: managemnt_network,
+      mgmt_int: fxp0,
+      mgmt_ip: 192.168.3.40,
+      mgmt_mask: 24      
+    }
+key_svr_ip: 172.25.152.10
+
+#######################################################################################
+# core_router:
+#######################################################################################
+core_router:
+  - hostname: vmx-core1
+
+core_ints:
+  - int: ge-0/0/0
+    desc: vm-management;192.168.3.0/24
+    ip: 192.168.3.42/24
+  - int: ge-0/0/1
+    desc: vmx5;ge-0/0/1
+    ip: 10.10.5.1/24
+  - int: ge-0/0/2
+    desc: vmx6;ge-0/0/1
+    ip: 10.10.6.1/24
+  - int: ge-0/0/3
+    desc: vmx7;ge-0/0/1
+    ip: 10.10.7.1/24
+  - int: ge-0/0/4
+    desc: vsrx1;ge-0/0/0
+    ip: 172.25.152.100/24
+
+core_statics:
+  - lo: 1.1.1.5
+    nxthop: 10.10.5.2
+  - lo: 1.1.1.6
+    nxthop: 10.10.6.2
+  - lo: 1.1.1.7
+    nxthop: 10.10.7.2
+
+## end of file ##

@@ -1,0 +1,78 @@
+set system host-name {{ item.hostname }}
+set system backup-router {{ backup_rtr }}
+{% for dst in backup_rtr_dst %}
+set system backup-router destination {{ dst }}
+{% endfor %}
+set system services ssh root-login deny
+set system services ssh protocol-version v2
+set system services ssh client-alive-count-max 3
+set system services ssh client-alive-interval 15
+set system services netconf ssh
+set system ntp boot-server {{ ntp_boot_svr }}
+set system ntp server {{ ntp_svr_backup }}
+set system ntp server {{ ntp_svr_pref }} prefer
+
+set interfaces {{ item.untrust_int }} description {{ item.untrust_desc }}
+set interfaces {{ item.untrust_int }} unit 0 family inet address {{ item.untrust_ip }}/{{item.untrust_mask }}
+set interfaces {{ item.trust_int }} description {{item.trust_desc }} 
+set interfaces {{ item.trust_int }} unit 0 family inet address {{ item.trust_ip }}/{{item.trust_mask }}
+set interfaces {{ item.mgmt_int }} description {{ item.mgmt_desc }}
+set interfaces {{ item.mgmt_int }} unit 0 family inet address {{ item.mgmt_ip }}/{{item.mgmt_mask }}
+
+{% for gm in group_members %}
+set routing-options static route {{ gm.wan_int_ip }}/32 next-hop {{ item.untrust_gateway }}
+{% endfor %}
+
+set security group-vpn server ike proposal {{ ike_proposal_name }} authentication-method pre-shared-keys
+set security group-vpn server ike proposal {{ ike_proposal_name }} authentication-algorithm {{ ike_auth_algorithm }}
+set security group-vpn server ike proposal {{ ike_proposal_name }} dh-group {{ ike_dh_group }}
+set security group-vpn server ike proposal {{ ike_proposal_name }} encryption-algorithm {{ ike_encryption_algorithm }}
+
+set security group-vpn server ike policy {{ ike_policy_name }} mode main
+set security group-vpn server ike policy {{ ike_policy_name }} proposals {{ ike_proposal_name }}
+set security group-vpn server ike policy {{ ike_policy_name }} pre-shared-key ascii-text {{ ike_psk }}
+
+
+{% for gm in group_members %}
+set security group-vpn server ike gateway {{ gm.hostname }} ike-policy {{ ike_policy_name }}
+set security group-vpn server ike gateway {{ gm.hostname }} address {{ gm.wan_int_ip }}
+set security group-vpn server ike gateway {{ gm.hostname }} local-address {{ item.untrust_ip }}
+{% endfor %}
+
+set security group-vpn server ipsec proposal {{ ipsec_proposal_name }} authentication-algorithm {{ ipsec_auth_algorithm }}
+set security group-vpn server ipsec proposal {{ ipsec_proposal_name }} encryption-algorithm {{ ike_encryption_algorithm }}
+set security group-vpn server ipsec proposal {{ ipsec_proposal_name }} lifetime-seconds 3600
+
+set security group-vpn server group {{ group_vpn_name }} group-id {{ ipsec_group_id }}
+set security group-vpn server group {{ group_vpn_name }} member-threshold 2000
+{% for gm in group_members %}
+set security group-vpn server group {{ group_vpn_name }} ike-gateway {{ gm.hostname }}
+{% endfor %}
+set security group-vpn server group {{ group_vpn_name }} anti-replay-time-window 1000
+deactivate security group-vpn server group {{ group_vpn_name }} anti-replay-time-window
+set security group-vpn server group {{ group_vpn_name }} server-member-communication communication-type unicast
+set security group-vpn server group {{ group_vpn_name }} server-member-communication lifetime-seconds 7200
+set security group-vpn server group {{ group_vpn_name }} server-member-communication encryption-algorithm {{ ike_encryption_algorithm }}
+set security group-vpn server group {{ group_vpn_name }} server-member-communication sig-hash-algorithm {{ ike_auth_algorithm }}
+set security group-vpn server group {{ group_vpn_name }} ipsec-sa {{ ipsec_sa_name }} proposal {{ ipsec_proposal_name }}
+set security group-vpn server group {{ group_vpn_name }} ipsec-sa {{ ipsec_sa_name }} match-policy 2 source {{ loopback_net }}
+set security group-vpn server group {{ group_vpn_name }} ipsec-sa {{ ipsec_sa_name }} match-policy 2 destination {{ loopback_net }}
+set security group-vpn server group {{ group_vpn_name }} ipsec-sa {{ ipsec_sa_name }} match-policy 2 protocol 0
+
+set security policies global policy 1000 match source-address any
+set security policies global policy 1000 match destination-address any
+set security policies global policy 1000 match application any
+set security policies global policy 1000 match from-zone any
+set security policies global policy 1000 match to-zone any
+set security policies global policy 1000 then reject
+set security policies global policy 1000 then log session-init
+set security policies global policy 1000 then count
+set security policies default-policy deny-all
+set security zones security-zone untrust host-inbound-traffic system-services all
+set security zones security-zone untrust host-inbound-traffic protocols all
+set security zones security-zone untrust interfaces {{ item.untrust_int }}
+set security zones security-zone trust tcp-rst
+set security zones security-zone trust host-inbound-traffic system-services all
+set security zones security-zone trust host-inbound-traffic protocols all
+set security zones security-zone trust interfaces {{ item.trust_int }}
+

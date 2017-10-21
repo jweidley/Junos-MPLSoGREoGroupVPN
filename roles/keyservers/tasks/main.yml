@@ -1,0 +1,5 @@
+---
+- name: Generate KEY SERVER configuration files
+  template: src=keyserver.j2 dest="{{playbook_dir}}/Configs/{{item.hostname}}.set"
+  with_items: "{{key_server}}"
+

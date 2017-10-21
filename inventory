@@ -1,0 +1,6 @@
+[devices]
+vsrx1          junos_host=192.168.3.40
+vmx-core1      junos_host=192.168.3.42
+vmx5           junos_host=192.168.3.35
+vmx6           junos_host=192.168.3.36
+vmx7           junos_host=192.168.3.37

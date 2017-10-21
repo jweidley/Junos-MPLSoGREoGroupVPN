@@ -1,0 +1,140 @@
+set system host-name {{ item.hostname }}
+set system backup-router {{ backup_rtr }}
+{% for dst in backup_rtr_dst %}
+set system backup-router destination {{ dst }}
+{% endfor %}
+set system services ssh root-login deny
+set system services ssh protocol-version v2
+set system services ssh client-alive-count-max 3
+set system services ssh client-alive-interval 15
+set system services netconf ssh
+set system ntp boot-server {{ ntp_boot_svr }}
+set system ntp server {{ ntp_svr_backup }}
+set system ntp server {{ ntp_svr_pref }} prefer
+
+set chassis fpc {{ item.ts_fpc }} pic {{ item.ts_pic }} tunnel-services bandwidth 1g
+set chassis fpc {{ item.ts_fpc }} pic {{ item.ts_pic }} inline-services bandwidth 1g
+set chassis network-services enhanced-ip
+
+set services service-set {{ svc_set_name }} interface-service service-interface {{ item.svc_int}}.0
+set services service-set {{ svc_set_name }} ipsec-group-vpn {{ group_vpn_name }}
+
+set security group-vpn member ike proposal {{ ike_proposal_name }} authentication-method pre-shared-keys
+set security group-vpn member ike proposal {{ ike_proposal_name }} dh-group {{ ike_dh_group }}
+set security group-vpn member ike proposal {{ ike_proposal_name }} authentication-algorithm {{ ike_auth_algorithm }}
+set security group-vpn member ike proposal {{ ike_proposal_name }} encryption-algorithm {{ ike_encryption_algorithm }}
+set security group-vpn member ike policy {{ ike_policy_name }} mode main
+set security group-vpn member ike policy {{ ike_policy_name }} proposals {{ ike_proposal_name }}
+set security group-vpn member ike policy {{ ike_policy_name }} pre-shared-key ascii-text {{ ike_psk }}
+set security group-vpn member ike gateway {{ ike_policy_name }} ike-policy {{ ike_policy_name }}
+set security group-vpn member ike gateway {{ ike_policy_name }} server-address {{ key_svr_ip }}
+set security group-vpn member ike gateway {{ ike_policy_name }} local-address {{ item.wan_int_ip }}
+set security group-vpn member ipsec vpn {{ group_vpn_name }} ike-gateway {{ ike_policy_name }}
+set security group-vpn member ipsec vpn {{ group_vpn_name }} group {{ ipsec_group_id }} 
+set security group-vpn member ipsec vpn {{ group_vpn_name }} match-direction output
+set security group-vpn member ipsec vpn {{ group_vpn_name }} tunnel-mtu {{ ipsec_mtu }}
+set security group-vpn member ipsec vpn {{ group_vpn_name }} df-bit clear
+
+set interfaces lo0 unit 0 family inet address {{ item.lo0_ip }}/{{ item.lo0_mask }}
+set interfaces lo0 unit 0 family mpls
+
+set interfaces {{ item.svc_int }} description "Inline IPSec Interface"
+set interfaces {{ item.svc_int }} unit 0 family inet
+
+set interfaces {{ item.wan_int }} description "WAN Facing Interface"
+set interfaces {{ item.wan_int }} unit 0 family inet service input service-set {{ svc_set_name }} service-filter {{ ff_name }}
+set interfaces {{ item.wan_int }} unit 0 family inet service output service-set {{ svc_set_name }} service-filter {{ ff_name }}
+set interfaces {{ item.wan_int }} unit 0 family inet address {{ item.wan_int_ip }}/24
+
+set interfaces {{ item.lan_int }} description "Customer Facing Interface"
+set interfaces {{ item.lan_int }} flexible-vlan-tagging
+set interfaces {{ item.lan_int }} encapsulation flexible-ethernet-services
+
+set interfaces gr-{{ item.ts_fpc }}/{{ item.ts_pic }}/10 description "GRE Interface"
+set interfaces gr-{{ item.ts_fpc }}/{{ item.ts_pic }}/10 traps
+
+{% for dev in group_members %}
+{% if (dev.hostname != item.hostname) %}
+set interfaces gr-{{ item.ts_fpc }}/{{ item.ts_pic }}/10 unit {{ dev.site_index }} description "Tunnel to {{ dev.hostname }}"
+set interfaces gr-{{ item.ts_fpc }}/{{ item.ts_pic }}/10 unit {{ dev.site_index }} tunnel source {{ item.lo0_ip }}
+set interfaces gr-{{ item.ts_fpc }}/{{ item.ts_pic }}/10 unit {{ dev.site_index }} tunnel destination {{ dev.lo0_ip }}
+set interfaces gr-{{ item.ts_fpc }}/{{ item.ts_pic }}/10 unit {{ dev.site_index }} family inet
+set interfaces gr-{{ item.ts_fpc }}/{{ item.ts_pic }}/10 unit {{ dev.site_index }} family mpls
+set protocols ospf area 0.0.0.0 interface gr-{{ item.ts_fpc }}/{{ item.ts_pic }}/10.{{ dev.site_index }} interface-type p2p
+set protocols rsvp interface gr-{{ item.ts_fpc }}/{{ item.ts_pic }}/10.{{ dev.site_index }}
+set protocols mpls interface gr-{{ item.ts_fpc }}/{{ item.ts_pic }}/10.{{ dev.site_index }}
+{% endif %}
+{% endfor %}
+
+{% for p2p in overlay %}
+{% if (item.site_index == p2p.source) %}
+set interfaces gr-{{ item.ts_fpc }}/{{ item.ts_pic }}/10 unit {{ p2p.neighbor }} family inet address {{ p2p.ipaddr }}
+{% endif %}
+{% endfor %}
+
+set routing-options router-id {{ item.lo0_ip }}
+set routing-options route-distinguisher-id {{ item.lo0_ip }}
+set routing-options autonomous-system {{ as_num }}
+set routing-options auto-export
+
+set routing-options static route {{ key_svr_ip }}/32 next-hop {{ item.wan_gateway }}
+{% for gm in group_members %}
+{% if gm.hostname != item.hostname %}
+set routing-options static route {{ gm.lo0_ip }}/32 next-hop {{ item.wan_gateway }}
+{% endif %}
+{% endfor %}
+
+set protocols rsvp interface ge-0/0/0.0 disable
+set protocols ospf traffic-engineering
+set protocols ospf area 0.0.0.0 interface lo0.0 passive
+set protocols ospf area 0.0.0.0 interface ge-0/0/0.0 disable
+
+set protocols mpls log-updown trap
+set protocols mpls log-updown trap-path-down
+set protocols mpls log-updown trap-path-up
+set protocols mpls interface lo0.0
+set protocols mpls interface ge-0/0/0.0 disable
+
+{% for dev in group_members %}
+{% if (dev.hostname != item.hostname) %}
+set protocols mpls label-switched-path {{ item.hostname }}-to-{{ dev.hostname }} description "To {{ dev.hostname }}"
+set protocols mpls label-switched-path {{ item.hostname }}-to-{{ dev.hostname }} from {{ item.lo0_ip }}
+set protocols mpls label-switched-path {{ item.hostname }}-to-{{ dev.hostname }} to {{ dev.lo0_ip }}
+{% endif %}
+{% endfor %}
+
+set protocols bgp log-updown
+set protocols bgp group {{ bgp_group_name }} type internal
+set protocols bgp group {{ bgp_group_name }} local-address {{ item.lo0_ip }}
+set protocols bgp group {{ bgp_group_name }} family inet unicast
+set protocols bgp group {{ bgp_group_name }} family inet-vpn unicast
+set protocols bgp group {{ bgp_group_name }} family l2vpn auto-discovery-only
+set protocols bgp group {{ bgp_group_name }} family l2vpn signaling
+set protocols bgp group {{ bgp_group_name }} export interfaces
+set protocols bgp group {{ bgp_group_name }} peer-as {{ as_num }}
+
+{% if item.RR %}
+set protocols bgp group {{ bgp_group_name }} cluster {{ item.lo0_ip }}
+set protocols bgp group {{ bgp_group_name }} allow {{ loopback_net }}
+
+{% else %}
+{% for rr in route_reflectors %}
+set protocols bgp group {{ bgp_group_name }} neighbor {{ rr }}
+{% endfor %}
+
+{% endif %}
+
+set protocols oam gre-tunnel interface gr-{{ item.ts_fpc }}/{{ item.ts_pic }}/10 keepalive-time 5
+set protocols oam gre-tunnel interface gr-{{ item.ts_fpc }}/{{ item.ts_pic }}/10 hold-time 10
+
+set policy-options policy-statement interfaces term 2 from protocol direct
+set policy-options policy-statement interfaces term 2 then accept
+
+set firewall family inet service-filter {{ ff_name }} term inbound-ks from source-address {{ key_svr_ip }}/32
+set firewall family inet service-filter {{ ff_name }} term inbound-ks then skip
+set firewall family inet service-filter {{ ff_name }} term outbound-ks from destination-address {{ key_svr_ip }}/32
+set firewall family inet service-filter {{ ff_name }} term outbound-ks then skip
+set firewall family inet service-filter {{ ff_name }} term GRE_OVERLAY from source-address {{ loopback_net }}
+set firewall family inet service-filter {{ ff_name }} term GRE_OVERLAY from destination-address {{ loopback_net }}
+set firewall family inet service-filter {{ ff_name }} term GRE_OVERLAY then service
+
