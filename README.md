@@ -19,7 +19,7 @@ An Ansible playbook to automatically generate and/or deploy configuration files 
 2. Edit group_vars/all/ files with site specific information
 3. Update the inventory file with IP address information
 4. a. Build and test Netconf: ansible-playbook -i inventory build.yml
-4. a. Build and deploy: ansible-playbook -i inventory build_deploy.yml
+4. b. Build and deploy: ansible-playbook -i inventory build_deploy.yml
 5. Configuration files outputed to: ./Configs directory
 
 
